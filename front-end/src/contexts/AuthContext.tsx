@@ -93,21 +93,38 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const register = async (name: string, username: string, email: string, password: string) => {
     setLoading(true);
     try {
-      // Mock API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const mockUser: User = {
-        id: '123',
-        name,
-        username,
-        email,
-        profilePicture: 'https://i.pravatar.cc/150?img=68',
-        watchedMovies: [],
-        languagePreference: 'en'
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name,
+          username,
+          email,
+          password,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Registration failed');
+      }
+
+      const data = await response.json();
+
+      const registeredUser: User = {
+        id: data.id,
+        name: data.name,
+        username: data.username,
+        email: data.email,
+        profilePicture: data.profilePicture || 'https://i.pravatar.cc/150?img=68',
+        watchedMovies: data.watchedMovies || [],
+        languagePreference: data.languagePreference || 'en',
       };
-      
-      setUser(mockUser);
-      localStorage.setItem('user', JSON.stringify(mockUser));
+
+      setUser(registeredUser);
+      localStorage.setItem('user', JSON.stringify(registeredUser));
     } catch (error) {
       console.error('Registration error:', error);
       throw error;
