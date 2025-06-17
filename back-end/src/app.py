@@ -1,16 +1,17 @@
 
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from api import auth
 from fastapi.middleware.cors import CORSMiddleware
 
-VITE_URL = os.getenv("VITE_URL", "http://localhost:5173")
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", ["http://localhost:5173"])
 
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[VITE_URL],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

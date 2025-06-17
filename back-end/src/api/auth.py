@@ -1,36 +1,79 @@
-from fastapi import APIRouter
-from pydantic import BaseModel, Field, EmailStr, field_validator
+from fastapi import APIRouter, HTTPException, status, Depends
+from pydantic import BaseModel, EmailStr, Field
 from db import db
-from core.security import hash_password, verify_password
-from typing import Literal
-import random
 
 router = APIRouter()
 
-class UserRegister(BaseModel):
-    name: str = Field(..., min_length=2, max_length=50)
-    username: str = Field(..., min_length=3, max_length=20)
-    email: EmailStr
-    password: str = Field(..., min_length=6, max_length=100)
-    @field_validator("password", mode='after')
-    def preprocess_word(cls, v):
-        return hash_password(v)
-    profilePicture: str = Field(default=f'https://i.pravatar.cc/150?img={random.randint(1, 70)}')
-    watchedMovies: list[str] = Field(default_factory=list)
-    languagePreference: str = Field(default='en')
-    role: Literal['user', 'admin'] = Field(default='user')
-
 class User(BaseModel):
-    id: str
     name: str
     username: str
     email: EmailStr
     profilePicture: str
-    watchedMovies: list[str]
     languagePreference: str
+    
+class AuthToken(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+############################# Register Endpoint ############################
+from db.auth import UserDataSet
 
 @router.post("/register")
-async def register(user: UserRegister):
+async def register(user: UserDataSet = Depends()):
     result = await db.users.insert_one(user.model_dump())
 
-    return User(**user.model_dump(), id=str(result.inserted_id))
+    if not result.acknowledged:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="User registration failed"
+        )
+
+    return User(**user.model_dump())
+
+
+############################ Login Endpoint ############################
+from pydantic import TypeAdapter
+from db.auth import verify_password
+from core.token import create_access_token
+
+
+def is_email(value: str) -> bool:
+    email_adapter = TypeAdapter(EmailStr)
+    try:
+        email_adapter.validate_python(value)
+        return True
+    except ValueError:
+        return False
+
+class UserLogin(BaseModel):
+    username: str = Field(..., min_length=3, max_length=20)
+    password: str = Field(..., min_length=6, max_length=100)
+
+@router.post("/login")
+async def login(user: UserLogin):
+    if is_email(user.username):
+        result = await db.users.find_one({"email": user.username})
+    else:
+        result = await db.users.find_one({"username": user.username})
+
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+
+    if not verify_password(user.password, result.get("password")):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect password"
+        )
+
+    token = create_access_token({
+            "sub": str(result["_id"]),
+            "username": result["username"]
+        })
+
+    return User(**result), AuthToken(
+        access_token=token,
+        token_type="bearer"
+    )
