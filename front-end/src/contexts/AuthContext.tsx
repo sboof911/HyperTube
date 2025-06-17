@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { API_URL, defaultHeaders } from "../config";
 
 export interface User {
   id: string;
@@ -93,11 +94,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const register = async (name: string, username: string, email: string, password: string) => {
     setLoading(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/auth/register`, {
+      const response = await fetch(`${API_URL}/auth/register`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: defaultHeaders,
         body: JSON.stringify({
           name,
           username,
@@ -118,9 +117,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         name: data.name,
         username: data.username,
         email: data.email,
-        profilePicture: data.profilePicture || 'https://i.pravatar.cc/150?img=68',
-        watchedMovies: data.watchedMovies || [],
-        languagePreference: data.languagePreference || 'en',
+        profilePicture: data.profilePicture,
+        watchedMovies: data.watchedMovies,
+        languagePreference: data.languagePreference,
       };
 
       setUser(registeredUser);
