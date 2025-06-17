@@ -5,7 +5,7 @@ with open("requirements.txt") as f:
     requirements = f.read().splitlines()
 
 setup(
-    name="HyperTube_app",
+    name="My_app",
     version="0.1",
     packages=find_packages(),
     install_requires=requirements,
