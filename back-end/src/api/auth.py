@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
 from db import db
 
@@ -19,7 +19,16 @@ class AuthToken(BaseModel):
 from db.auth import UserDataSet
 
 @router.post("/register")
-async def register(user: UserDataSet = Depends()):
+async def register(user: UserDataSet):
+    existing_user = await db.users.find_one({
+        "$or": [{"username": user.username}, {"email": user.email}]
+    })
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username or email already exists"
+        )
+
     result = await db.users.insert_one(user.model_dump())
 
     if not result.acknowledged:
@@ -77,3 +86,4 @@ async def login(user: UserLogin):
         access_token=token,
         token_type="bearer"
     )
+

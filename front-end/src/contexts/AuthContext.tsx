@@ -60,7 +60,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     checkAuthStatus();
   }, []);
 
-  // Mock login function - in a real app, this would call your backend
+  // login function
   const login = async (username: string, password: string) => {
     setLoading(true);
     try {
