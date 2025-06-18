@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
+from core.token import create_access_token
 from db import db
 
 router = APIRouter()
@@ -37,7 +38,15 @@ async def register(user: UserDataSet):
             detail="User registration failed"
         )
 
-    return User(**user.model_dump())
+    token = create_access_token({
+            "sub": str(result.inserted_id),
+            "username": user.username
+        })
+
+    return User(**user.model_dump()), AuthToken(
+        access_token=token,
+        token_type="bearer"
+    )
 
 
 ############################ Login Endpoint ############################
@@ -87,3 +96,61 @@ async def login(user: UserLogin):
         token_type="bearer"
     )
 
+############################## OAUTH Endpoint ############################
+import os
+from typing import Literal
+from fastapi import Request, Body
+from authlib.integrations.starlette_client import OAuth
+from starlette.config import Config
+from starlette.responses import RedirectResponse
+
+
+
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
+config = Config(environ={
+    "GOOGLE_CLIENT_ID": GOOGLE_CLIENT_ID,
+    "GOOGLE_CLIENT_SECRET": GOOGLE_CLIENT_SECRET
+})
+if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+    raise ValueError("GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set in environment variables")
+
+google_oauth = OAuth(config)
+
+
+class OAuthLogin(BaseModel):
+    provider: Literal['google', '42'] = Field(...)
+
+
+@router.get("/oauth")
+async def oauth_login(request: Request, provider: str):
+    redirect_uri = request.url_for('google_callback')
+    if provider == 'google':
+        google_oauth.register(
+            name='google',
+            server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+            client_kwargs={
+                'scope': 'openid email profile'
+            }
+        )
+        if not google_oauth.google:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Google OAuth is not configured"
+            )
+        return await google_oauth.google.authorize_redirect(request, redirect_uri)
+    else:
+        pass
+
+@router.get('/google/callback', name="google_callback")
+async def auth_callback(request: Request):
+    token = await google_oauth.google.authorize_access_token(request)
+    user_info = await google_oauth.google.parse_id_token(request, token)
+
+    print("User Info:", user_info)
+    
+    # Here you would typically create/get user from DB
+    return {
+        "access_token": token['access_token'],
+        "user_info": user_info
+    }
