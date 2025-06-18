@@ -2,12 +2,10 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 import { API_URL, defaultHeaders } from "../config";
 
 export interface User {
-  id: string;
   name: string;
   username: string;
   email: string;
   profilePicture?: string;
-  watchedMovies: string[];
   languagePreference: 'en' | 'fr';
 }
 
@@ -62,26 +60,32 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     checkAuthStatus();
   }, []);
 
-  // Mock login function - in a real app, this would call your backend
-  const login = async (email: string, password: string) => {
+  // login function
+  const login = async (username: string, password: string) => {
     setLoading(true);
     try {
-      // Mock API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // This is a mock user - in a real app, this would come from your backend
-      const mockUser: User = {
-        id: '123',
-        name: 'John Doe',
-        username: 'johndoe',
-        email,
-        profilePicture: 'https://i.pravatar.cc/150?img=68',
-        watchedMovies: ['tt0111161', 'tt0068646'],
-        languagePreference: 'en'
-      };
-      
-      setUser(mockUser);
-      localStorage.setItem('user', JSON.stringify(mockUser));
+      const response = await fetch(`${API_URL}/auth/login`, {
+        method: 'POST',
+        headers: defaultHeaders,
+        body: JSON.stringify({
+          username,
+          password,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'login failed');
+      }
+
+      const data = await response.json();
+
+      const loginUser = data[0] as User;
+      const token = data[1];
+
+      setUser(loginUser);
+      localStorage.setItem('user', JSON.stringify(loginUser));
+      localStorage.setItem('token', JSON.stringify(token));
     } catch (error) {
       console.error('Login error:', error);
       throw error;
@@ -90,7 +94,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
-  // Mock register function
+  // Register function
   const register = async (name: string, username: string, email: string, password: string) => {
     setLoading(true);
     try {
@@ -112,15 +116,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
       const data = await response.json();
 
-      const registeredUser: User = {
-        id: data.id,
-        name: data.name,
-        username: data.username,
-        email: data.email,
-        profilePicture: data.profilePicture,
-        watchedMovies: data.watchedMovies,
-        languagePreference: data.languagePreference,
-      };
+      const registeredUser = data as User;
 
       setUser(registeredUser);
       localStorage.setItem('user', JSON.stringify(registeredUser));
@@ -136,6 +132,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const logout = () => {
     setUser(null);
     localStorage.removeItem('user');
+    localStorage.removeItem('token');
+    setLoading(false);
   };
 
   // Mock update profile function
@@ -167,12 +165,10 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       
       // This is a mock user - in a real app, this would come from your OAuth provider
       const mockUser: User = {
-        id: '123',
         name: provider === 'google' ? 'Google User' : '42 User',
         username: provider === 'google' ? 'googleuser' : '42user',
         email: provider === 'google' ? 'user@gmail.com' : 'user@student.42.fr',
         profilePicture: 'https://i.pravatar.cc/150?img=68',
-        watchedMovies: [],
         languagePreference: 'en'
       };
       

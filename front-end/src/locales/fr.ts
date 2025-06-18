@@ -117,7 +117,6 @@ export const fr = {
   alreadyHaveAccount: 'Vous avez déjà un compte ?',
   continueWithGoogle: 'Continuer avec Google',
   continueWith42: 'Continuer avec 42',
-  orContinueWith: 'Ou continuer avec',
   
   // Validation Messages
   nameRequired: 'Le nom est requis',
