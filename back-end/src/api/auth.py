@@ -2,19 +2,12 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
 from core.token import create_access_token
 from db import db
+from .users import PublicUser
+from core.token import AuthToken
+
 
 router = APIRouter()
 
-class User(BaseModel):
-    name: str
-    username: str
-    email: EmailStr
-    profilePicture: str
-    languagePreference: str
-    
-class AuthToken(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
 
 ############################# Register Endpoint ############################
 from db.auth import UserDataSet
@@ -43,10 +36,7 @@ async def register(user: UserDataSet):
             "username": user.username
         })
 
-    return User(**user.model_dump()), AuthToken(
-        access_token=token,
-        token_type="bearer"
-    )
+    return PublicUser(**user.model_dump()), AuthToken(access_token=token)
 
 
 ############################ Login Endpoint ############################
@@ -91,15 +81,14 @@ async def login(user: UserLogin):
             "username": result["username"]
         })
 
-    return User(**result), AuthToken(
-        access_token=token,
-        token_type="bearer"
+    return PublicUser(**result), AuthToken(
+        access_token=token
     )
 
 ############################## OAUTH Endpoint ############################
 import os
 from typing import Literal
-from fastapi import Request, Body
+from fastapi import Request
 from authlib.integrations.starlette_client import OAuth
 from starlette.config import Config
 from starlette.responses import RedirectResponse
@@ -144,13 +133,18 @@ async def oauth_login(request: Request, provider: str):
 
 @router.get('/google/callback', name="google_callback")
 async def auth_callback(request: Request):
-    token = await google_oauth.google.authorize_access_token(request)
-    user_info = await google_oauth.google.parse_id_token(request, token)
+    # token = await google_oauth.google.authorize_access_token(request)
+    # print(token)
+    # user_info = await google_oauth.google.parse_id_token(request, token)
 
-    print("User Info:", user_info)
-    
+    ## Need to Create User from DB
+    # print("User Info:", user_info)
     # Here you would typically create/get user from DB
-    return {
-        "access_token": token['access_token'],
-        "user_info": user_info
-    }
+    token = AuthToken(access_token="dummy_token")  # Simulated token for testing
+    
+    return RedirectResponse(f"{os.getenv("FRONTEND_URL")}/oauth?token={token.access_token}&token_type={token.token_type}") # NEED CHNAGE NOW
+    # return {
+    #     "access_token": token['access_token'],
+    #     "user_info": user_info
+    # }
+    

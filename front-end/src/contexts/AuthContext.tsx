@@ -121,7 +121,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       setUser(registeredUser);
       localStorage.setItem('user', JSON.stringify(registeredUser));
       localStorage.setItem('token', JSON.stringify(token));
-      console.log(token);
     } catch (error) {
       console.error('Registration error:', error);
       throw error;
@@ -163,19 +162,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     setLoading(true);
     try {
       window.location.href = `${API_URL}/auth/oauth?provider=google`;
-
-      // response = await fetch(`${API_URL}/auth/oauth?provider=${provider}`, {
-      // This is a mock user - in a real app, this would come from your OAuth provider
-      // const mockUser: User = {
-      //   name: provider === 'google' ? 'Google User' : '42 User',
-      //   username: provider === 'google' ? 'googleuser' : '42user',
-      //   email: provider === 'google' ? 'user@gmail.com' : 'user@student.42.fr',
-      //   profilePicture: 'https://i.pravatar.cc/150?img=68',
-      //   languagePreference: 'en'
-      // };
-
-      // setUser(mockUser);
-      // localStorage.setItem('user', JSON.stringify(mockUser));
     } catch (error) {
       console.error(`${provider} login error:`, error);
       throw error;

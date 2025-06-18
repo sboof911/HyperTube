@@ -5,6 +5,12 @@ from fastapi.security import OAuth2PasswordBearer
 from fastapi import HTTPException, Depends
 from db import db
 from bson import ObjectId
+from pydantic import BaseModel
+
+class AuthToken(BaseModel):
+    access_token: str
+    token_type: str = "Bearer"
+
 
 # Load environment variables
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 15))

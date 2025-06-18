@@ -17,6 +17,7 @@ const RegisterPage = lazy(() => import('./pages/auth/RegisterPage'));
 const ForgotPasswordPage = lazy(() => import('./pages/auth/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('./pages/auth/ResetPasswordPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
+const OAuthCallback = lazy(() => import('./pages/auth/OAuthCallback'));
 
 function App() {
   return (
@@ -32,8 +33,17 @@ function App() {
                   <Route path="/register" element={<RegisterPage />} />
                   <Route path="/forgot-password" element={<ForgotPasswordPage />} />
                   <Route path="/reset-password" element={<ResetPasswordPage />} />
+                  <Route path="/oauth" element={<OAuthCallback />} />
                   
                   {/* Protected routes */}
+                  {/* <Route 
+                    path="/oauth" 
+                    element={
+                      <ProtectedRoute>
+                        <OAuthCallback  />
+                      </ProtectedRoute>
+                    } 
+                  /> */}
                   <Route 
                     path="/library" 
                     element={

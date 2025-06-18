@@ -2,7 +2,7 @@
 import os
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
-from api import auth
+from api import auth, users
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
@@ -47,3 +47,4 @@ async def custom_http_exception_handler(request: Request, exc: HTTPException):
 
 # Include routers
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
+app.include_router(users.router, prefix="/users", tags=["users"])
