@@ -169,7 +169,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const loginWithOAuth = async (provider: 'google' | '42') => {
     setLoading(true);
     try {
-      window.location.href = `${API_URL}/auth/oauth?provider=google`;
+      window.location.href = `${API_URL}/auth/oauth?provider=${provider}`;
     } catch (error) {
       console.error(`${provider} login error:`, error);
       throw error;

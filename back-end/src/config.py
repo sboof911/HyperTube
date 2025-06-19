@@ -30,3 +30,9 @@ if MONGODB_URI is None:
 DB_NAME = os.getenv("DB_NAME", None)
 if DB_NAME is None:
     raise ValueError("DB_NAME must be set in environment variables")
+_42_CLIENT_ID = os.getenv("42_CLIENT_ID", None)
+if _42_CLIENT_ID is None:
+    raise ValueError("42_CLIENT_ID must be set in environment variables")
+_42_CLIENT_SECRET = os.getenv("42_CLIENT_SECRET", None)
+if _42_CLIENT_SECRET is None:
+    raise ValueError("42_CLIENT_SECRET must be set in environment variables")

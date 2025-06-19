@@ -16,4 +16,3 @@ class UserDataSet(BaseModel):
     profilePicture: str = Field(default_factory=random_profile_picture)
     languagePreference: str = Field(default='en')
     is_admin: bool = Field(default=False)
-    oauth_ids : list[str]= Field(default=[])

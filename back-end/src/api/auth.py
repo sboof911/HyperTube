@@ -91,34 +91,35 @@ from fastapi import Request
 from authlib.integrations.starlette_client import OAuth, OAuthError
 from starlette.responses import RedirectResponse
 from starlette.config import Config
-from config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, FRONTEND_URL
+from config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, FRONTEND_URL, _42_CLIENT_ID, _42_CLIENT_SECRET
 import string, secrets
 
 
-config = Config(environ={
-    "GOOGLE_CLIENT_ID": GOOGLE_CLIENT_ID,
-    "GOOGLE_CLIENT_SECRET": GOOGLE_CLIENT_SECRET
-})
-
-google_oauth = OAuth(config)
+google_oauth = OAuth()
 google_oauth.register(
     name='google',
+    client_id=GOOGLE_CLIENT_ID,
+    client_secret=GOOGLE_CLIENT_SECRET,
     server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
     client_kwargs={
         'scope': 'openid email profile'
     }
 )
 
-
-class OAuthLogin(BaseModel):
-    provider: Literal['google', '42'] = Field(...)
-
+oauth_42 = OAuth()
+oauth_42.register(
+    name='42',
+    client_id=_42_CLIENT_ID,
+    client_secret=_42_CLIENT_SECRET,
+    access_token_url='https://api.intra.42.fr/oauth/token',
+    authorize_url='https://api.intra.42.fr/oauth/authorize'
+)
 
 
 @router.get("/oauth")
-async def oauth_login(request: Request, provider: str):
-    redirect_uri = request.url_for('google_callback')
+async def oauth_login(request: Request, provider : Literal["google", "42"]):
     if provider == 'google':
+        redirect_uri = request.url_for('google_callback')
         if not google_oauth.google:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -127,21 +128,50 @@ async def oauth_login(request: Request, provider: str):
 
         google = google_oauth.create_client('google')
         return await google.authorize_redirect(request, redirect_uri)
+    elif provider == '42':
+        redirect_uri = request.url_for('42_callback')
+        oauth_42_client = oauth_42.create_client('42')
+        if not oauth_42_client:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="42 OAuth is not configured"
+            )
+        return await oauth_42_client.authorize_redirect(request, redirect_uri)
     else:
-        pass
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unsupported OAuth provider"
+        )
 
-@router.get("/test")
-async def test_oauth():
-    user = UserDataSet(
-        name="Test User",
-        username="testuser",
-        email="test@test.com",
-        password="testpassword",
-        profilePicture=UserDataSet.model_fields['profilePicture'].default_factory()
-    )
 
-    return user.profilePicture
+################################ Google Callback Endpoint ############################
 
+async def oauth_log(user_info):
+    existing_user = await db.users.find_one({"email": user_info["email"]})
+    access_token = None
+    if not existing_user:
+        # Create a new user in the database
+        username = user_info["email"].split('@')[0]
+        existing_user = await db.users.find_one({"username": username})
+        if existing_user:
+            import random
+            username = f"{username}_{random.randint(0, 9999)}"
+        response = await register(UserDataSet(
+            name=user_info.get("name", "Unknown"),
+            username=username,
+            email=user_info["email"],
+            password= ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(12)),
+            profilePicture=user_info.get("picture", UserDataSet.model_fields['profilePicture'].default_factory())
+        ))
+        access_token = response[1].access_token
+    else:
+        access_token = create_access_token({
+                "sub": str(existing_user["_id"]),
+                "username": existing_user["username"]
+            })
+
+    return RedirectResponse(f"{FRONTEND_URL}/oauth?token={access_token}")
+    
 @router.get('/google', name="google_callback")
 async def auth_callback(request: Request):
     try:
@@ -159,28 +189,37 @@ async def auth_callback(request: Request):
             detail="Failed to retrieve user info from Google"
         )
     user_info = token['userinfo']
-    existing_user = await db.users.find_one({"email": user_info["email"]})
-    access_token = None
-    if not existing_user:
-        # Create a new user in the database
-        username = user_info.get("email", "unknown").split('@')[0]
-        existing_user = await db.users.find_one({"username": username})
-        if existing_user:
-            import random
-            username = f"{username}_{random.randint(0, 9999)}"
-        response = await register(UserDataSet(
-            name=user_info.get("name", "Unknown"),
-            username=username,
-            email=user_info["email"],
-            password= ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(12)),
-            profilePicture=user_info.get("picture", UserDataSet.model_fields['profilePicture'].default_factory()),
-            oauth_ids=[user_info["sub"]]
-        ))
-        access_token = response[1].access_token
-    else:
-        access_token = create_access_token({
-                "sub": str(existing_user["_id"]),
-                "username": existing_user["username"]
-            })
 
-    return RedirectResponse(f"{FRONTEND_URL}/oauth?token={access_token}")
+    return await oauth_log(user_info)
+
+################################# 42 Callback Endpoint ############################
+
+@router.get('/42', name="42_callback")
+async def auth_callback_42(request: Request):
+    try:
+        oauth_42_client = oauth_42.create_client('42')
+        token = await oauth_42_client.authorize_access_token(request)
+    except OAuthError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"OAuth error: {str(e)}"
+        )
+
+    try:
+        user_info = await oauth_42_client.get('https://api.intra.42.fr/v2/me', token=token)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to retrieve user info from 42: {str(e)}"
+        )
+    user_info = user_info.json()
+    img_link = user_info.get("image", {}).get("link", None)
+    user_info = {
+        "name": user_info.get("displayname", "Unknown"),
+        "email": user_info.get("email", ""),
+    }
+    if img_link:
+        user_info["picture"] = img_link
+
+    return await oauth_log(user_info)
+
