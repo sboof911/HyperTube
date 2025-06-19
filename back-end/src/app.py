@@ -1,5 +1,4 @@
 
-import os
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from api import auth, users
@@ -7,8 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from starlette.status import HTTP_422_UNPROCESSABLE_ENTITY
 from starlette.middleware.sessions import SessionMiddleware
+from config import CORS_ORIGINS, SESSION_SECRET_KEY
 
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", ["http://localhost:5173"])
 
 app = FastAPI()
 
@@ -22,8 +21,11 @@ app.add_middleware(
 
 app.add_middleware(
     SessionMiddleware,
-    secret_key=os.getenv("SESSION_SECRET_KEY")
+    secret_key=SESSION_SECRET_KEY,
+    same_site="lax",       # safe for OAuth
+    https_only=False,  # TODO: set to True in production
 )
+
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     formatted_errors = []

@@ -20,6 +20,7 @@ interface AuthContextType {
   loginWithOAuth: (provider: 'google' | '42') => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
   resetPassword: (token: string, newPassword: string) => Promise<void>;
+  syncAuthFromStorage: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -60,6 +61,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     checkAuthStatus();
   }, []);
 
+  const syncAuthFromStorage = () => {
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        setUser(JSON.parse(storedUser));
+      }
+    };
+  
   // login function
   const login = async (username: string, password: string) => {
     setLoading(true);
@@ -208,7 +216,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         updateProfile,
         loginWithOAuth,
         forgotPassword,
-        resetPassword
+        resetPassword,
+        syncAuthFromStorage
       }}
     >
       {children}

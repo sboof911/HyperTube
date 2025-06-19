@@ -1,21 +1,17 @@
 from jose import jwt, JWTError
 from datetime import datetime, timedelta, timezone
-import os
 from fastapi.security import OAuth2PasswordBearer
 from fastapi import HTTPException, Depends
 from db import db
 from bson import ObjectId
 from pydantic import BaseModel
+from config import SECRET_KEY, ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 
 class AuthToken(BaseModel):
     access_token: str
     token_type: str = "Bearer"
 
 
-# Load environment variables
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 15))
-SECRET_KEY = os.getenv("SECRET_KEY")
-ALGORITHM = os.getenv("ALGORITHM")
 if not SECRET_KEY or not ALGORITHM:
     raise ValueError("SECRET_KEY and ALGORITHM must be set in environment variables")
 

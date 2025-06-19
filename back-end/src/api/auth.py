@@ -41,7 +41,7 @@ async def register(user: UserDataSet):
 
 ############################ Login Endpoint ############################
 from pydantic import TypeAdapter
-from db.auth import verify_password
+from core.security import verify_password
 from core.token import create_access_token
 
 
@@ -86,65 +86,101 @@ async def login(user: UserLogin):
     )
 
 ############################## OAUTH Endpoint ############################
-import os
 from typing import Literal
 from fastapi import Request
-from authlib.integrations.starlette_client import OAuth
-from starlette.config import Config
+from authlib.integrations.starlette_client import OAuth, OAuthError
 from starlette.responses import RedirectResponse
+from starlette.config import Config
+from config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, FRONTEND_URL
+import string, secrets
 
 
-
-GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
-GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
 config = Config(environ={
     "GOOGLE_CLIENT_ID": GOOGLE_CLIENT_ID,
     "GOOGLE_CLIENT_SECRET": GOOGLE_CLIENT_SECRET
 })
-if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
-    raise ValueError("GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set in environment variables")
 
 google_oauth = OAuth(config)
+google_oauth.register(
+    name='google',
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
+    client_kwargs={
+        'scope': 'openid email profile'
+    }
+)
 
 
 class OAuthLogin(BaseModel):
     provider: Literal['google', '42'] = Field(...)
 
 
+
 @router.get("/oauth")
 async def oauth_login(request: Request, provider: str):
     redirect_uri = request.url_for('google_callback')
     if provider == 'google':
-        google_oauth.register(
-            name='google',
-            server_metadata_url='https://accounts.google.com/.well-known/openid-configuration',
-            client_kwargs={
-                'scope': 'openid email profile'
-            }
-        )
         if not google_oauth.google:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Google OAuth is not configured"
             )
-        return await google_oauth.google.authorize_redirect(request, redirect_uri)
+
+        google = google_oauth.create_client('google')
+        return await google.authorize_redirect(request, redirect_uri)
     else:
         pass
 
-@router.get('/google/callback', name="google_callback")
-async def auth_callback(request: Request):
-    # token = await google_oauth.google.authorize_access_token(request)
-    # print(token)
-    # user_info = await google_oauth.google.parse_id_token(request, token)
+@router.get("/test")
+async def test_oauth():
+    user = UserDataSet(
+        name="Test User",
+        username="testuser",
+        email="test@test.com",
+        password="testpassword",
+        profilePicture=UserDataSet.model_fields['profilePicture'].default_factory()
+    )
 
-    ## Need to Create User from DB
-    # print("User Info:", user_info)
-    # Here you would typically create/get user from DB
-    token = AuthToken(access_token="dummy_token")  # Simulated token for testing
-    
-    return RedirectResponse(f"{os.getenv("FRONTEND_URL")}/oauth?token={token.access_token}&token_type={token.token_type}") # NEED CHNAGE NOW
-    # return {
-    #     "access_token": token['access_token'],
-    #     "user_info": user_info
-    # }
-    
+    return user.profilePicture
+
+@router.get('/google', name="google_callback")
+async def auth_callback(request: Request):
+    try:
+        google = google_oauth.create_client('google')
+        token = await google.authorize_access_token(request)
+    except OAuthError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"OAuth error: {str(e)}"
+        )
+
+    if not token or 'userinfo' not in token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Failed to retrieve user info from Google"
+        )
+    user_info = token['userinfo']
+    existing_user = await db.users.find_one({"email": user_info["email"]})
+    access_token = None
+    if not existing_user:
+        # Create a new user in the database
+        username = user_info.get("email", "unknown").split('@')[0]
+        existing_user = await db.users.find_one({"username": username})
+        if existing_user:
+            import random
+            username = f"{username}_{random.randint(0, 9999)}"
+        response = await register(UserDataSet(
+            name=user_info.get("name", "Unknown"),
+            username=username,
+            email=user_info["email"],
+            password= ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(12)),
+            profilePicture=user_info.get("picture", UserDataSet.model_fields['profilePicture'].default_factory()),
+            oauth_ids=[user_info["sub"]]
+        ))
+        access_token = response[1].access_token
+    else:
+        access_token = create_access_token({
+                "sub": str(existing_user["_id"]),
+                "username": existing_user["username"]
+            })
+
+    return RedirectResponse(f"{FRONTEND_URL}/oauth?token={access_token}")

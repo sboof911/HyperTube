@@ -36,14 +36,6 @@ function App() {
                   <Route path="/oauth" element={<OAuthCallback />} />
                   
                   {/* Protected routes */}
-                  {/* <Route 
-                    path="/oauth" 
-                    element={
-                      <ProtectedRoute>
-                        <OAuthCallback  />
-                      </ProtectedRoute>
-                    } 
-                  /> */}
                   <Route 
                     path="/library" 
                     element={

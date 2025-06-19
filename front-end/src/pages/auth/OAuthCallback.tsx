@@ -2,10 +2,12 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_URL, defaultHeaders } from "../../config";
 import { User } from "../../contexts/AuthContext";
-
+import { useAuth } from '../../contexts/AuthContext';
 
 const OAuthCallback = () => {
   const navigate = useNavigate();
+
+  const { syncAuthFromStorage } = useAuth();
 
   useEffect(() => {
     const handleOAuthResponse = async () => {
@@ -36,13 +38,12 @@ const OAuthCallback = () => {
 
         const data = await response.json(); 
         const loginUser = data as User;
-
         console.log('OAuth login successful:', loginUser);
 
         localStorage.setItem('user', JSON.stringify(loginUser));
+        syncAuthFromStorage(); // 👈 update context state
       } catch (err) {
         console.error('OAuth login failed:', err);
-        navigate('/login');
       }
       finally {
         navigate('/library');
