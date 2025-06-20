@@ -20,6 +20,7 @@ interface AuthContextType {
   loginWithOAuth: (provider: 'google' | '42') => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
   resetPassword: (token: string, newPassword: string) => Promise<void>;
+  syncAuthFromStorage: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -60,6 +61,13 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     checkAuthStatus();
   }, []);
 
+  const syncAuthFromStorage = () => {
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        setUser(JSON.parse(storedUser));
+      }
+    };
+  
   // login function
   const login = async (username: string, password: string) => {
     setLoading(true);
@@ -115,11 +123,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       }
 
       const data = await response.json();
-
-      const registeredUser = data as User;
+      const registeredUser = data[0] as User;
+      const token = data[1];
 
       setUser(registeredUser);
       localStorage.setItem('user', JSON.stringify(registeredUser));
+      localStorage.setItem('token', JSON.stringify(token));
     } catch (error) {
       console.error('Registration error:', error);
       throw error;
@@ -128,7 +137,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
-  // Mock logout function
+  // logout Function
   const logout = () => {
     setUser(null);
     localStorage.removeItem('user');
@@ -156,24 +165,11 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
-  // Mock OAuth login
+  // OAuth login
   const loginWithOAuth = async (provider: 'google' | '42') => {
     setLoading(true);
     try {
-      // Mock API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // This is a mock user - in a real app, this would come from your OAuth provider
-      const mockUser: User = {
-        name: provider === 'google' ? 'Google User' : '42 User',
-        username: provider === 'google' ? 'googleuser' : '42user',
-        email: provider === 'google' ? 'user@gmail.com' : 'user@student.42.fr',
-        profilePicture: 'https://i.pravatar.cc/150?img=68',
-        languagePreference: 'en'
-      };
-      
-      setUser(mockUser);
-      localStorage.setItem('user', JSON.stringify(mockUser));
+      window.location.href = `${API_URL}/auth/oauth?provider=${provider}`;
     } catch (error) {
       console.error(`${provider} login error:`, error);
       throw error;
@@ -220,7 +216,8 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         updateProfile,
         loginWithOAuth,
         forgotPassword,
-        resetPassword
+        resetPassword,
+        syncAuthFromStorage
       }}
     >
       {children}
