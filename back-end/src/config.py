@@ -14,9 +14,6 @@ if GOOGLE_CLIENT_ID is None:
 GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", None)
 if GOOGLE_CLIENT_SECRET is None:
     raise ValueError("GOOGLE_CLIENT_SECRET must be set in environment variables")
-FRONTEND_URL = os.getenv("FRONTEND_URL")
-if FRONTEND_URL is None:
-    raise ValueError("FRONTEND_URL must be set in environment variables")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 15))
 SECRET_KEY = os.getenv("SECRET_KEY", None)
 if SECRET_KEY is None:
