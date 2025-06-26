@@ -1,7 +1,6 @@
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, EmailStr, Field
 from core.token import create_access_token
-from db import db
 from .users import PublicUser
 from core.token import AuthToken
 
@@ -11,28 +10,20 @@ router = APIRouter()
 
 ############################# Register Endpoint ############################
 from db.auth import UserDataSet
+from db.user import register_user_in_db, find_user_by_keywords_or
 
 @router.post("/register")
-async def register(user: UserDataSet):
-    existing_user = await db.users.find_one({
-        "$or": [{"username": user.username}, {"email": user.email}]
-    })
+async def register(user: UserDataSet, status_response = status.HTTP_201_CREATED):
+    existing_user = await find_user_by_keywords_or(["username", "email"], [user.username, user.email])
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Username or email already exists"
         )
 
-    result = await db.users.insert_one(user.model_dump())
-
-    if not result.acknowledged:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="User registration failed"
-        )
-
+    inserted_id = await register_user_in_db(user)
     token = create_access_token({
-            "sub": str(result.inserted_id),
+            "sub": inserted_id,
             "username": user.username
         })
 
@@ -43,6 +34,7 @@ async def register(user: UserDataSet):
 from pydantic import TypeAdapter
 from core.security import verify_password
 from core.token import create_access_token
+from db.user import find_user_by_keyword
 
 
 def is_email(value: str) -> bool:
@@ -58,11 +50,11 @@ class UserLogin(BaseModel):
     password: str = Field(..., min_length=6, max_length=100)
 
 @router.post("/login")
-async def login(user: UserLogin):
+async def login(user: UserLogin, status_response = status.HTTP_200_OK):
     if is_email(user.username):
-        result = await db.users.find_one({"email": user.username})
+        result = await find_user_by_keyword("email", user.username)
     else:
-        result = await db.users.find_one({"username": user.username})
+        result = await find_user_by_keyword("username", user.username)
 
     if result is None:
         raise HTTPException(
@@ -90,8 +82,7 @@ from typing import Literal
 from fastapi import Request
 from authlib.integrations.starlette_client import OAuth, OAuthError
 from starlette.responses import RedirectResponse
-from starlette.config import Config
-from config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, FRONTEND_URL, _42_CLIENT_ID, _42_CLIENT_SECRET
+from config import GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, _42_CLIENT_ID, _42_CLIENT_SECRET
 import string, secrets
 
 
@@ -146,13 +137,13 @@ async def oauth_login(request: Request, provider : Literal["google", "42"]):
 
 ################################ Google Callback Endpoint ############################
 
-async def oauth_log(user_info):
-    existing_user = await db.users.find_one({"email": user_info["email"]})
+async def oauth_log(request: Request, user_info):
+    existing_user = await find_user_by_keyword("email", user_info["email"])
     access_token = None
     if not existing_user:
         # Create a new user in the database
         username = user_info["email"].split('@')[0]
-        existing_user = await db.users.find_one({"username": username})
+        existing_user = await find_user_by_keyword("username", username)
         if existing_user:
             import random
             username = f"{username}_{random.randint(0, 9999)}"
@@ -170,7 +161,8 @@ async def oauth_log(user_info):
                 "username": existing_user["username"]
             })
 
-    return RedirectResponse(f"{FRONTEND_URL}/oauth?token={access_token}")
+    url = request.headers.get("referer")
+    return RedirectResponse(f"{url}oauth?token={access_token}")
     
 @router.get('/google', name="google_callback")
 async def auth_callback(request: Request):
@@ -190,7 +182,7 @@ async def auth_callback(request: Request):
         )
     user_info = token['userinfo']
 
-    return await oauth_log(user_info)
+    return await oauth_log(request, user_info)
 
 ################################# 42 Callback Endpoint ############################
 
@@ -221,5 +213,4 @@ async def auth_callback_42(request: Request):
     if img_link:
         user_info["picture"] = img_link
 
-    return await oauth_log(user_info)
-
+    return await oauth_log(request, user_info)
